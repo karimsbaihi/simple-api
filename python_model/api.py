@@ -18,10 +18,10 @@ app.add_middleware(
 # Old code
 # model = torch.load("best_model.pt")
 
-# New code for CPU-only
-model = torch.load("best_model.pt", map_location=torch.device('cpu'))
+# Load full model (not just weights) on CPU
+model = torch.load("best_model.pt", map_location=torch.device('cpu'), weights_only=False)
+model.eval()  # set to evaluation mode
 
-model.eval()
 
 # Replace with your Tiny ImageNet labels
 classes = ["class_0", "class_1", "...", "class_199"]
