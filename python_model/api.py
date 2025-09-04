@@ -11,7 +11,7 @@ from PIL import Image
 app = Flask(__name__)
 
 # Device
-device = torch.device("cpu")  # use GPU if available: torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")  # Render generally doesn't provide GPU
 
 # Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -27,8 +27,8 @@ model.fc = torch.nn.Sequential(
     torch.nn.Linear(model.fc.in_features, 200)
 )
 
-# Load state dict
-checkpoint = torch.load(MODEL_PATH, map_location=device)
+# Load checkpoint (weights + extra metadata)
+checkpoint = torch.load(MODEL_PATH, map_location=device, weights_only=False)
 model.load_state_dict(checkpoint["model_state_dict"])
 model.to(device)
 model.eval()
@@ -46,7 +46,7 @@ transform = transforms.Compose([
                          std=[0.2296, 0.2263, 0.2255])
 ])
 
-# -------------------- Prediction --------------------
+# -------------------- Prediction Function --------------------
 def predict_image(img: Image.Image):
     img_tensor = transform(img).unsqueeze(0).to(device)
     with torch.no_grad():
@@ -56,7 +56,8 @@ def predict_image(img: Image.Image):
 
     # Top 5 predictions
     top5_probs, top5_classes = torch.topk(probabilities, 5)
-    top5 = [{"class": idx_to_word[i.item()], "confidence": float(p.item())} for i, p in zip(top5_classes, top5_probs)]
+    top5 = [{"class": idx_to_word[i.item()], "confidence": float(p.item())}
+            for i, p in zip(top5_classes, top5_probs)]
     return {"prediction": idx_to_word[pred.item()], "top5": top5}
 
 # -------------------- Routes --------------------
