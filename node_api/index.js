@@ -74,7 +74,7 @@ app.post("/predict", async (req, res) => {
 
     // Replace this URL:
     const response = await axios.post(
-      "http://127.0.0.1:5000/predict",
+      "https://tiny-imagenet-service.onrender.com/predict",
       formData,
       { headers: formData.getHeaders() }
     );
