@@ -15,8 +15,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load model (runs on Render server)
-model = torch.load("best_model.pt")
+# Old code
+# model = torch.load("best_model.pt")
+
+# New code for CPU-only
+model = torch.load("best_model.pt", map_location=torch.device('cpu'))
+
 model.eval()
 
 # Replace with your Tiny ImageNet labels

@@ -1,0 +1,2 @@
+curl -X POST https://tiny-imagenet-service.onrender.com/predict \
+  -F "image=@//home/karim/Documents/3Y/ML/project/data/tiny-imagenet-200/test/images/test_1008.JPEG"
