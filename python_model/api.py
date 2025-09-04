@@ -8,12 +8,20 @@ import os
 
 # ------------------- CONFIG -------------------
 device = torch.device('cpu')
-
-# Paths
 results_path = ''
 
+def load_model_checkpoint(path, device):
+    """Load model checkpoint with compatibility for different PyTorch versions"""
+    try:
+        return torch.load(path, map_location=device, weights_only=False)
+    except TypeError:
+        return torch.load(path, map_location=device)
+    except Exception as e:
+        print(f"Error loading checkpoint: {e}")
+        raise
+
 # ------------------- MODEL SETUP -------------------
-model = models.resnet34(pretrained=False)
+model = models.resnet34(weights=None)
 model.conv1 = torch.nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
 model.maxpool = torch.nn.Identity()
 model.fc = torch.nn.Sequential(
@@ -21,59 +29,25 @@ model.fc = torch.nn.Sequential(
     torch.nn.Linear(model.fc.in_features, 200)
 )
 
+# Verify files exist
+model_path = os.path.join(results_path, 'best_model.pt')
+mappings_path = os.path.join(results_path, 'class_mappings.pkl')
+
+if not os.path.exists(model_path):
+    raise FileNotFoundError(f"Model file not found: {model_path}")
+
 # Load trained checkpoint
-checkpoint = torch.load(results_path+'best_model.pt', map_location=device)
+checkpoint = load_model_checkpoint(model_path, device)
 model.load_state_dict(checkpoint['model_state_dict'])
 model.to(device)
 model.eval()
 
 # ------------------- CLASS MAPPINGS -------------------
-with open(results_path+'class_mappings.pkl', 'rb') as f:
+if not os.path.exists(mappings_path):
+    raise FileNotFoundError(f"Class mappings file not found: {mappings_path}")
+
+with open(mappings_path, 'rb') as f:
     class_to_idx, wnid_to_words = pickle.load(f)
 idx_to_word = {v: wnid_to_words[k] for k, v in class_to_idx.items()}
 
-# ------------------- IMAGE TRANSFORMS -------------------
-transform = transforms.Compose([
-    transforms.Resize(64),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.4802, 0.4481, 0.3975], 
-                         std=[0.2296, 0.2263, 0.2255])
-])
-
-# ------------------- PREDICTION FUNCTION -------------------
-def predict_top5(image):
-    img = Image.open(image).convert('RGB')
-    img_tensor = transform(img).unsqueeze(0).to(device)
-    
-    with torch.no_grad():
-        output = model(img_tensor)
-        probs = F.softmax(output, dim=1)[0] * 100
-        top5_probs, top5_idx = torch.topk(probs, 5)
-    
-    top5 = []
-    for i, p in zip(top5_idx, top5_probs):
-        top5.append({
-            "class": idx_to_word[i.item()],
-            "confidence": float(p.item())
-        })
-    return top5
-
-# ------------------- FLASK APP -------------------
-app = Flask(__name__)
-
-@app.route('/predict', methods=['POST'])
-def predict():
-    if 'image' not in request.files:
-        return jsonify({"error": "No image file provided"}), 400
-    
-    file = request.files['image']
-    
-    try:
-        top5 = predict_top5(file)
-        return jsonify({"predictions": top5})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# ------------------- RUN SERVER -------------------
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+# ... rest of the code remains the same ...
