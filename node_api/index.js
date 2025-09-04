@@ -72,12 +72,13 @@ app.post("/predict", async (req, res) => {
     const formData = new FormData();
     formData.append("file", file.data, file.name);
 
-    // Replace with your Python microservice URL
+    // Replace this URL:
     const response = await axios.post(
-      "https://tiny-imagenet-service.onrender.com/predict",
+      "http://127.0.0.1:5000/predict",
       formData,
       { headers: formData.getHeaders() }
     );
+
 
     res.json(response.data);
   } catch (err) {
