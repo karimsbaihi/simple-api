@@ -7,19 +7,6 @@ import pickle
 import os
 import logging
 
-
-# Add at the very top of api.py
-import os
-os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:32'
-os.environ['OMP_NUM_THREADS'] = '1'
-os.environ['MKL_NUM_THREADS'] = '1'
-
-# Add after model loading
-import gc
-gc.collect()
-if torch.cuda.is_available():
-    torch.cuda.empty_cache()
-
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -44,6 +31,12 @@ if not check_files():
 logger.info("Loading model...")
 checkpoint = torch.load('simple_model.pt', map_location=device, weights_only=False)
 
+#checkpoints debug
+logger.info(f"Checkpoint keys: {list(checkpoint.keys())}")
+if 'class_to_idx' in checkpoint:
+    logger.info(f"class_to_idx type: {type(checkpoint['class_to_idx'])}")
+    logger.info(f"class_to_idx value: {checkpoint['class_to_idx']}")
+
 model = models.resnet34(weights=None)
 model.conv1 = torch.nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
 model.maxpool = torch.nn.Identity()
@@ -56,13 +49,28 @@ model.load_state_dict(checkpoint['model_state_dict'])
 model.to(device)
 model.eval()
 
-# Load class mappings
-if 'class_to_idx' in checkpoint and 'wnid_to_words' in checkpoint:
+# Load class mappings - FIXED THIS PART
+class_to_idx = None
+wnid_to_words = None
+
+# Try to get from checkpoint first
+if 'class_to_idx' in checkpoint and checkpoint['class_to_idx'] is not None:
     class_to_idx = checkpoint['class_to_idx']
     wnid_to_words = checkpoint['wnid_to_words']
+    logger.info("Loaded class mappings from model checkpoint")
 else:
-    with open('class_mappings.pkl', 'rb') as f:
-        class_to_idx, wnid_to_words = pickle.load(f)
+    # Fallback to separate file
+    try:
+        with open('class_mappings.pkl', 'rb') as f:
+            class_to_idx, wnid_to_words = pickle.load(f)
+        logger.info("Loaded class mappings from separate file")
+    except Exception as e:
+        logger.error(f"Failed to load class mappings: {e}")
+        raise
+
+# DOUBLE CHECK that we have the mappings
+if class_to_idx is None or wnid_to_words is None:
+    raise RuntimeError("Class mappings are None - check your model file or class_mappings.pkl")
 
 idx_to_word = {v: wnid_to_words[k] for k, v in class_to_idx.items()}
 logger.info("Model loaded successfully!")
@@ -91,7 +99,11 @@ app = Flask(__name__)
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    return jsonify({"status": "healthy", "model_loaded": True})
+    return jsonify({
+        "status": "healthy", 
+        "model_loaded": True,
+        "class_mappings_loaded": class_to_idx is not None
+    })
 
 @app.route('/predict', methods=['POST'])
 def predict():
