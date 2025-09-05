@@ -126,7 +126,7 @@
     }
 
     .image-preview {
-      max-width: 320px;   /* 🔥 bigger size */
+      max-width: 320px;   
       width: 100%;
       display: block;
       margin: 0 auto 2rem;
@@ -136,7 +136,7 @@
     }
 
     .image-preview:hover {
-      transform: scale(1.03); /* subtle zoom hover */
+      transform: scale(1.03);
     }
 
     .predictions {
@@ -185,6 +185,26 @@
       transition: width 0.5s ease;
     }
 
+    /* Social Media Section */
+    .socials {
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+
+    .socials a {
+      text-decoration: none;
+      font-size: 1.5rem;
+      color: #6d83f2;
+      transition: all 0.3s ease;
+    }
+
+    .socials a:hover {
+      color: #48c6ef;
+      transform: scale(1.2);
+    }
+
     footer {
       padding: 1rem;
       text-align: center;
@@ -220,6 +240,14 @@
     <div class="results-section" id="resultsSection">
       <img id="imagePreview" class="image-preview" />
       <div class="predictions" id="predictions"></div>
+    </div>
+
+    <!-- Social Media Links -->
+    <div class="socials">
+      <a href="https://github.com/karimsbaihi" target="_blank" title="GitHub">🐙</a>
+      <a href="https://www.upwork.com/freelancers/~01379430995870d088" target="_blank" title="Upwork">💼</a>
+      <a href="https://www.linkedin.com/in/ahmed-karim-sbaihi-03061032b/" target="_blank" title="LinkedIn">🔗</a>
+      <a href="https://karimsbaihi.vercel.app" target="_blank" title="Website">🌐</a>
     </div>
 
     <footer>
