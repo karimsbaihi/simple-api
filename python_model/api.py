@@ -6,84 +6,114 @@ from flask import Flask, request, jsonify
 import pickle
 import os
 import logging
+import requests
+import gdown  # For Google Drive downloads
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ------------------- DEBUG -------------------
-def debug_files():
-    """Debug function to check file status"""
-    results_path = ''
-    model_path = os.path.join(results_path, 'best_model.pt')
-    mappings_path = os.path.join(results_path, 'class_mappings.pkl')
-    
-    logger.info(f"Current working directory: {os.getcwd()}")
-    logger.info(f"Files in directory: {os.listdir('.')}")
-    
-    if os.path.exists(model_path):
-        file_size = os.path.getsize(model_path)
-        logger.info(f"Model file exists. Size: {file_size} bytes")
-        
-        # Check if it's a Git LFS pointer
-        try:
-            with open(model_path, 'r', encoding='utf-8') as f:
-                content = f.read(200)
-                if 'version https://git-lfs.github.com/spec/' in content:
-                    logger.error("ERROR: Model file is a Git LFS pointer!")
-                    logger.error("Content: %s", content[:100])
-                    return False
-        except UnicodeDecodeError:
-            # File is binary (good sign)
-            pass
-        except Exception as e:
-            logger.error(f"Error reading model file: {e}")
-    else:
-        logger.error("Model file does not exist!")
-        return False
-        
-    if os.path.exists(mappings_path):
-        logger.info(f"Class mappings file exists. Size: {os.path.getsize(mappings_path)} bytes")
-    else:
-        logger.error("Class mappings file does not exist!")
-        return False
-        
-    return True
-
 # ------------------- CONFIG -------------------
 device = torch.device('cpu')
-results_path = ''
 
-def load_model_checkpoint(path, device):
-    """Load model checkpoint with compatibility for different PyTorch versions"""
+#mapping link https://drive.google.com/file/d/1jrU9q1TMhVU3GgK_wVQ1dimq6NiC3961/view?usp=sharing
+#model link https://drive.google.com/file/d/1TOZ2U-KuYc_9kFdqztWISbaJAu8BiTof/view?usp=drive_link
+
+# Google Drive file IDs (extract from your URLs)
+MODEL_FILE_ID = "1TOZ2U-KuYc_9kFdqztWISbaJAu8BiTof"
+MAPPINGS_FILE_ID = "1jrU9q1TMhVU3GgK_wVQ1dimq6NiC3961"  # Replace with actual mappings file ID if different
+
+# Direct download URLs (Google Drive format)
+MODEL_URL = f"https://drive.google.com/uc?id={MODEL_FILE_ID}&export=download"
+MAPPINGS_URL = f"https://drive.google.com/uc?id={MAPPINGS_FILE_ID}&export=download"  # If you have separate file
+
+def download_from_google_drive(file_id, filename):
+    """Download file from Google Drive using gdown"""
     try:
-        # Try with weights_only=False first
-        return torch.load(path, map_location=device, weights_only=False)
-    except TypeError:
-        # Fallback for older PyTorch versions
-        return torch.load(path, map_location=device)
+        url = f"https://drive.google.com/uc?id={file_id}"
+        gdown.download(url, filename, quiet=False)
+        
+        if os.path.exists(filename) and os.path.getsize(filename) > 1000:
+            logger.info(f"Successfully downloaded {filename}. Size: {os.path.getsize(filename)} bytes")
+            return True
+        else:
+            logger.error(f"Download failed or file is too small: {filename}")
+            return False
     except Exception as e:
-        logger.error(f"Error loading with weights_only=False: {e}")
-        # Try with weights_only=True as last resort
-        try:
-            return torch.load(path, map_location=device, weights_only=True)
-        except Exception as e2:
-            logger.error(f"Error loading with weights_only=True: {e2}")
-            raise
+        logger.error(f"Error downloading {filename}: {e}")
+        return False
 
-# ------------------- FILE VALIDATION -------------------
-model_path = os.path.join(results_path, 'best_model.pt')
-mappings_path = os.path.join(results_path, 'class_mappings.pkl')
+def download_file_direct(url, filename):
+    """Alternative direct download method"""
+    try:
+        session = requests.Session()
+        response = session.get(url, stream=True)
+        
+        # Handle Google Drive virus scan warning
+        if "virus scan" in response.text.lower():
+            # Extract confirm token
+            confirm = None
+            for line in response.text.split('\n'):
+                if "confirm=" in line:
+                    confirm = line.split('confirm=')[1].split('"')[0]
+                    break
+            
+            if confirm:
+                url = f"{url}&confirm={confirm}"
+                response = session.get(url, stream=True)
+        
+        response.raise_for_status()
+        
+        with open(filename, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+        
+        logger.info(f"Downloaded {filename}. Size: {os.path.getsize(filename)} bytes")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Direct download failed: {e}")
+        return False
 
-# Check files before proceeding
-if not debug_files():
-    raise FileNotFoundError("Required model files are missing or corrupted")
+def ensure_files_exist():
+    """Ensure model files exist, download if missing"""
+    files_to_check = [
+        ('best_model.pt', MODEL_FILE_ID, 10000000),  # ~10MB minimum
+        ('class_mappings.pkl', MODEL_FILE_ID, 1000)   # Replace with actual mappings ID
+    ]
+    
+    for filename, file_id, min_size in files_to_check:
+        if os.path.exists(filename):
+            file_size = os.path.getsize(filename)
+            if file_size >= min_size:
+                logger.info(f"{filename} already exists ({file_size} bytes)")
+                continue
+            else:
+                logger.warning(f"{filename} exists but is too small ({file_size} bytes), re-downloading")
+                os.remove(filename)
+        
+        # Try gdown first
+        logger.info(f"Downloading {filename}...")
+        if not download_from_google_drive(file_id, filename):
+            # Fallback to direct download
+            url = f"https://drive.google.com/uc?id={file_id}&export=download"
+            if not download_file_direct(url, filename):
+                raise RuntimeError(f"Failed to download {filename}")
 
-if not os.path.exists(model_path):
-    raise FileNotFoundError(f"Model file not found: {model_path}")
+# ------------------- DOWNLOAD FILES -------------------
+logger.info("Checking for required model files...")
+ensure_files_exist()
 
-if not os.path.exists(mappings_path):
-    raise FileNotFoundError(f"Class mappings file not found: {mappings_path}")
+# Verify files are valid
+model_path = 'best_model.pt'
+mappings_path = 'class_mappings.pkl'
+
+if not os.path.exists(model_path) or os.path.getsize(model_path) < 1000000:
+    raise RuntimeError("Model file is missing or invalid")
+
+if not os.path.exists(mappings_path) or os.path.getsize(mappings_path) < 1000:
+    raise RuntimeError("Class mappings file is missing or invalid")
 
 # ------------------- MODEL SETUP -------------------
 model = models.resnet34(weights=None)
@@ -93,6 +123,20 @@ model.fc = torch.nn.Sequential(
     torch.nn.Dropout(0.5),
     torch.nn.Linear(model.fc.in_features, 200)
 )
+
+def load_model_checkpoint(path, device):
+    """Load model checkpoint with compatibility for different PyTorch versions"""
+    try:
+        return torch.load(path, map_location=device, weights_only=False)
+    except TypeError:
+        return torch.load(path, map_location=device)
+    except Exception as e:
+        logger.error(f"Error loading with weights_only=False: {e}")
+        try:
+            return torch.load(path, map_location=device, weights_only=True)
+        except Exception as e2:
+            logger.error(f"Error loading with weights_only=True: {e2}")
+            raise
 
 # Load trained checkpoint
 try:
@@ -153,7 +197,15 @@ app = Flask(__name__)
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
-    return jsonify({"status": "healthy", "message": "API is running"})
+    return jsonify({
+        "status": "healthy", 
+        "message": "API is running",
+        "model_loaded": True,
+        "files": {
+            "model_size": os.path.getsize('best_model.pt'),
+            "mappings_size": os.path.getsize('class_mappings.pkl')
+        }
+    })
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -178,7 +230,11 @@ def model_info():
         "model": "ResNet34",
         "dataset": "TinyImageNet-200",
         "device": str(device),
-        "status": "loaded"
+        "status": "loaded",
+        "files": {
+            "model": os.path.exists('best_model.pt'),
+            "mappings": os.path.exists('class_mappings.pkl')
+        }
     })
 
 # ------------------- RUN SERVER -------------------
