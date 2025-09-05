@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tiny ImageNet Classifier</title>
+  <style>
+    /* Reset */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: "Inter", system-ui, sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, #f9fafc, #eef2f8);
+      padding: 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 700px;
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(12px);
+      border-radius: 20px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+
+    header {
+      padding: 2rem;
+      text-align: center;
+      background: linear-gradient(135deg, #6d83f2, #48c6ef);
+      color: white;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    header p {
+      opacity: 0.9;
+      font-size: 1rem;
+    }
+
+    .upload-section {
+      padding: 2rem;
+      text-align: center;
+    }
+
+    .upload-area {
+      border: 2px dashed #6d83f2;
+      border-radius: 16px;
+      padding: 3rem 2rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      background: rgba(109,131,242,0.05);
+    }
+
+    .upload-area:hover {
+      border-color: #48c6ef;
+      background: rgba(109,131,242,0.1);
+      transform: translateY(-2px);
+    }
+
+    .upload-icon {
+      font-size: 3rem;
+      color: #6d83f2;
+      margin-bottom: 1rem;
+    }
+
+    .btn {
+      margin-top: 1rem;
+      padding: 0.7rem 1.5rem;
+      font-size: 1rem;
+      border: none;
+      border-radius: 25px;
+      background: linear-gradient(135deg, #6d83f2, #48c6ef);
+      color: white;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 6px 20px rgba(72,198,239,0.3);
+    }
+
+    .loading {
+      text-align: center;
+      padding: 1rem;
+      display: none;
+    }
+
+    .spinner {
+      border: 3px solid #eee;
+      border-top: 3px solid #6d83f2;
+      border-radius: 50%;
+      width: 35px;
+      height: 35px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 0.5rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .error {
+      color: #e74c3c;
+      padding: 1rem;
+      text-align: center;
+      display: none;
+    }
+
+    .results-section {
+      padding: 2rem;
+      display: none;
+      text-align: center;
+    }
+
+    .image-preview {
+      max-width: 320px;   /* 🔥 bigger size */
+      width: 100%;
+      display: block;
+      margin: 0 auto 2rem;
+      border-radius: 16px;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+      transition: transform 0.3s ease;
+    }
+
+    .image-preview:hover {
+      transform: scale(1.03); /* subtle zoom hover */
+    }
+
+    .predictions {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .prediction-item {
+      background: rgba(255,255,255,0.8);
+      border-radius: 12px;
+      padding: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 3px 12px rgba(0,0,0,0.05);
+      transition: transform 0.2s ease;
+    }
+
+    .prediction-item:hover {
+      transform: translateY(-3px);
+    }
+
+    .prediction-class {
+      font-weight: 600;
+      color: #333;
+    }
+
+    .prediction-confidence {
+      font-weight: bold;
+      color: #6d83f2;
+    }
+
+    .confidence-bar {
+      margin-top: 6px;
+      height: 6px;
+      border-radius: 3px;
+      background: #eee;
+      overflow: hidden;
+    }
+
+    .confidence-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #6d83f2, #48c6ef);
+      border-radius: 3px;
+      transition: width 0.5s ease;
+    }
+
+    footer {
+      padding: 1rem;
+      text-align: center;
+      font-size: 0.85rem;
+      color: #777;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tiny ImageNet Classifier</h1>
+      <p>Upload an image and let AI guess what it is!</p>
+    </header>
+
+    <div class="upload-section">
+      <div class="upload-area" id="uploadArea">
+        <div class="upload-icon">📷</div>
+        <h3>Drag & drop your image</h3>
+        <p>or</p>
+        <button class="btn" onclick="document.getElementById('fileInput').click()">Choose File</button>
+        <input type="file" id="fileInput" style="display:none" accept="image/*" onchange="handleFileSelect(event)">
+      </div>
+    </div>
+
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p>AI is analyzing your image...</p>
+    </div>
+
+    <div class="error" id="error"></div>
+
+    <div class="results-section" id="resultsSection">
+      <img id="imagePreview" class="image-preview" />
+      <div class="predictions" id="predictions"></div>
+    </div>
+
+    <footer>
+      Powered by ResNet34 • Tiny ImageNet • Karim Sbaihi 2025
+    </footer>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById("fileInput");
+    const uploadArea = document.getElementById("uploadArea");
+    const loading = document.getElementById("loading");
+    const error = document.getElementById("error");
+    const resultsSection = document.getElementById("resultsSection");
+    const predictionsDiv = document.getElementById("predictions");
+    const imagePreview = document.getElementById("imagePreview");
+
+    uploadArea.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      uploadArea.style.borderColor = "#48c6ef";
+      uploadArea.style.background = "rgba(72,198,239,0.08)";
+    });
+
+    uploadArea.addEventListener("dragleave", () => {
+      uploadArea.style.borderColor = "#6d83f2";
+      uploadArea.style.background = "rgba(109,131,242,0.05)";
+    });
+
+    uploadArea.addEventListener("drop", (e) => {
+      e.preventDefault();
+      if (e.dataTransfer.files.length) {
+        handleFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    function handleFileSelect(e) {
+      if (e.target.files.length) handleFile(e.target.files[0]);
+    }
+
+    function handleFile(file) {
+      if (!file.type.startsWith("image/")) {
+        showError("Please upload a valid image");
+        return;
+      }
+      hideError();
+      resultsSection.style.display = "none";
+
+      const reader = new FileReader();
+      reader.onload = (e) => (imagePreview.src = e.target.result);
+      reader.readAsDataURL(file);
+
+      predictImage(file);
+    }
+
+    async function predictImage(file) {
+      loading.style.display = "block";
+      const formData = new FormData();
+      formData.append("image", file);
+
+      try {
+        const res = await fetch("/predict", { method: "POST", body: formData });
+        const data = await res.json();
+
+        if (res.ok) displayResults(data.predictions);
+        else showError(data.error || "Prediction failed");
+      } catch (err) {
+        showError("Network error: " + err.message);
+      } finally {
+        loading.style.display = "none";
+      }
+    }
+
+    function displayResults(predictions) {
+      predictionsDiv.innerHTML = "";
+      predictions.forEach((pred) => {
+        const item = document.createElement("div");
+        item.className = "prediction-item";
+        item.innerHTML = `
+          <div>
+            <div class="prediction-class">${pred.class}</div>
+            <div class="confidence-bar">
+              <div class="confidence-fill" style="width:${pred.confidence}%"></div>
+            </div>
+          </div>
+          <div class="prediction-confidence">${pred.confidence.toFixed(1)}%</div>
+        `;
+        predictionsDiv.appendChild(item);
+      });
+      resultsSection.style.display = "block";
+    }
+
+    function showError(msg) {
+      error.textContent = msg;
+      error.style.display = "block";
+    }
+
+    function hideError() {
+      error.style.display = "none";
+    }
+  </script>
+</body>
+</html>
