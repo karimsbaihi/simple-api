@@ -1,3 +1,4 @@
 
 
 curl -X POST -F "image=@/home/karim/Documents/3Y/ML/project/data/tiny-imagenet-200/test/images/test_11.JPEG" https://tiny-imagenet-service.onrender.com/predict
+curl -X POST -F "image=@home/karim/Documents/3Y/ML/project/data/tiny-imagenet-200/test/images/test_11.JPEG" https://tiny-imagenet-service.onrender.com/predict
